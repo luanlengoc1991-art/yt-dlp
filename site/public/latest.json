@@ -1,8 +1,8 @@
 {
-    "version":  "1.2.0",
+    "version":  "1.2.1",
     "url":  "https://ytdlp.luangroup.asia/yt-dlp-studio.exe",
-    "sha256":  "3bede48140f8d0afe1c22635dfeb03f6d4d2a5554e2313424a2f4ce6f3efa723",
-    "size":  18866364,
-    "notes":  "Them Thu vien (quan ly file da tai: xem, phat, doi ten, xoa) va Cai dat (thu muc, so video tai cung luc, khoi dong cung Windows, doi mat khau)",
-    "date":  "2026-10-28T08:00:40Z"
+    "sha256":  "e6bf51e5514285194805df42610588ee570f393bf1ac29e85c28d9ce2ca87a07",
+    "size":  18866590,
+    "notes":  "Sua loi trang trang sau khi tu cap nhat",
+    "date":  "2026-10-28T08:13:06Z"
 }
