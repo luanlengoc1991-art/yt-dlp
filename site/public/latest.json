@@ -1,8 +1,8 @@
 {
-    "version":  "1.2.1",
+    "version":  "1.3.0",
     "url":  "https://ytdlp.luangroup.asia/yt-dlp-studio.exe",
-    "sha256":  "e6bf51e5514285194805df42610588ee570f393bf1ac29e85c28d9ce2ca87a07",
-    "size":  18866590,
-    "notes":  "Sua loi trang trang sau khi tu cap nhat",
-    "date":  "2026-10-28T08:13:06Z"
+    "sha256":  "8f4cfff96a6c192c864c6c5955bc318b050648d2d37bcae3c6eda291822917e7",
+    "size":  18867092,
+    "notes":  "Tai toi da 50 video cung luc, dan toi da 500 link, nut Chon thu muc luu",
+    "date":  "2026-10-28T08:24:04Z"
 }
