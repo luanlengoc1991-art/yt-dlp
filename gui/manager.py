@@ -154,6 +154,28 @@ def rename(file_path, new_name):
     return target
 
 
+# ---------------------------------------------------------------- Hộp chọn thư mục
+def pick_folder(initial=''):
+    """Mở hộp chọn thư mục của Windows (nổi trên cùng). Trả về đường dẫn, hoặc '' nếu bấm Huỷ."""
+    initial = str(initial or '').replace("'", "''")
+    script = (
+        "Add-Type -AssemblyName System.Windows.Forms;"
+        "[Console]::OutputEncoding = [Text.Encoding]::UTF8;"
+        "$d = New-Object System.Windows.Forms.FolderBrowserDialog;"
+        "$d.Description = 'Chọn thư mục lưu video';"
+        "$d.ShowNewFolderButton = $true;"
+        f"if (Test-Path -LiteralPath '{initial}') {{ $d.SelectedPath = '{initial}' }};"
+        "$owner = New-Object System.Windows.Forms.Form -Property @{TopMost = $true; ShowInTaskbar = $false};"
+        "if ($d.ShowDialog($owner) -eq 'OK') { $d.SelectedPath }"
+    )
+    try:
+        r = subprocess.run(['powershell', '-NoProfile', '-STA', '-Command', script], capture_output=True,
+                           timeout=900, creationflags=subprocess.CREATE_NO_WINDOW)
+    except (OSError, subprocess.TimeoutExpired):
+        return ''
+    return r.stdout.decode('utf-8', 'replace').strip()
+
+
 # ---------------------------------------------------------------- Khởi động cùng Windows
 RUN_KEY = r'Software\Microsoft\Windows\CurrentVersion\Run'
 RUN_NAME = 'yt-dlp Studio'

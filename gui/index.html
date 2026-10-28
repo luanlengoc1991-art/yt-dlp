@@ -320,6 +320,8 @@
   .stepper { display: inline-flex; align-items: center; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; }
   .stepper button { width: 34px; height: 34px; background: var(--panel-2); font-size: 18px; }
   .stepper b { width: 40px; text-align: center; }
+  .stepper input { width: 52px; height: 34px; border: 0; background: var(--bg); color: var(--text); text-align: center; font: inherit; font-weight: 700; outline: 0; -moz-appearance: textfield; }
+  .stepper input::-webkit-inner-spin-button, .stepper input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 
   /* Hộp thoại */
   .modal { position: fixed; inset: 0; z-index: 20; background: rgba(5,6,10,.78); backdrop-filter: blur(6px); display: grid; place-items: center; padding: 20px; animation: fade .2s ease; }
@@ -511,7 +513,8 @@
     <div class="row">
       <label>Lưu vào</label>
       <div class="field">
-        <input class="input local-only" id="optFolder" spellcheck="false">
+        <input class="input local-only" id="optFolder" spellcheck="false" title="Thư mục lưu cho lần tải này">
+        <button class="btn btn-ghost local-only" id="optFolderPick" style="height:40px" title="Chọn thư mục lưu">Chọn…</button>
         <select class="input" id="optCookies" title="Dùng cookie của trình duyệt cho video cần đăng nhập / giới hạn tuổi">
           <option value="">Không dùng cookie</option>
           <option value="chrome">Cookie từ Chrome</option>
@@ -651,7 +654,7 @@ function renderPreview(info) {
 function renderMulti(urls) {
   const card = document.createElement('div');
   card.className = 'card';
-  card.innerHTML = `<div class="multi"><span class="big">${urls.length}</span><div><b>link sẵn sàng</b><div class="est">Sẽ tải lần lượt với cùng tuỳ chọn bên dưới</div></div></div>`;
+  card.innerHTML = `<div class="multi"><span class="big">${urls.length}</span><div><b>link sẵn sàng</b><div class="est">Vào hàng chờ, tải theo số video cùng lúc trong Cài đặt${urls.length > 500 ? ' · chỉ nhận 500 link đầu' : ''}</div></div></div>`;
   card.appendChild($('#tplOptions').content.cloneNode(true));
   $('#result').replaceChildren(card);
   setupOptions(card, null);
@@ -678,6 +681,12 @@ function setupOptions(card, info) {
   }
   $('#optFolder', card).value = state.config.default_folder || '';
   $('#optCookies', card).value = localStorage.cookies || '';
+  $('#optFolderPick', card).onclick = async e => {
+    const btn = e.currentTarget; btn.disabled = true;
+    try { const r = await api('/api/pick-folder', { initial: $('#optFolder', card).value }); if (r.folder) $('#optFolder', card).value = r.folder; }
+    catch (err) { toast(err.message); }
+    btn.disabled = false;
+  };
 
   const updateEst = () => {
     const est = $('#est', card);
@@ -1005,10 +1014,11 @@ async function loadSettings() {
 
     <div class="sgroup"><h4>Tải xuống</h4>
       <div class="srow"><div class="lbl"><b>Thư mục lưu</b><span>Ổ ${esc(s.disk?.drive || '')} còn trống ${fmtSize(s.disk?.free) || '—'}</span></div>
-        <div class="ctl">${local ? `<input class="input" id="setFolder" value="${esc(s.download_folder)}" spellcheck="false"><button class="btn btn-ghost btn-sm" id="setFolderSave">Lưu</button>`
+        <div class="ctl">${local ? `<input class="input" id="setFolder" value="${esc(s.download_folder)}" spellcheck="false" title="Gõ đường dẫn rồi bấm Lưu, hoặc bấm Chọn…">
+          <button class="btn btn-ghost btn-sm" id="setFolderPick">${ICON.folder} Chọn…</button><button class="btn btn-ghost btn-sm" id="setFolderSave">Lưu</button>`
           : `<span class="state">${esc(s.download_folder)}</span>`}</div></div>
-      <div class="srow"><div class="lbl"><b>Số video tải cùng lúc</b><span>Video còn lại sẽ chờ lượt. Để 1–2 giúp YouTube ít chặn hơn.</span></div>
-        <div class="ctl">${local ? `<div class="stepper"><button id="setConcDown">−</button><b id="setConc">${s.max_concurrent}</b><button id="setConcUp">+</button></div>` : `<span class="state">${s.max_concurrent}</span>`}</div></div>
+      <div class="srow"><div class="lbl"><b>Số video tải cùng lúc</b><span>Từ 1 đến ${s.max_concurrent_limit || 50}. Video còn lại sẽ chờ lượt. Tải YouTube nhiều cùng lúc (trên khoảng 5) dễ bị chặn tạm thời.</span></div>
+        <div class="ctl">${local ? `<div class="stepper"><button id="setConcDown">−</button><input id="setConc" type="number" min="1" max="${s.max_concurrent_limit || 50}" value="${s.max_concurrent}"><button id="setConcUp">+</button></div>` : `<span class="state">${s.max_concurrent}</span>`}</div></div>
       <div class="srow"><div class="lbl"><b>Dọn file tải dở</b><span>${s.leftovers ? `${s.leftovers} file tải dở (.part) đang chiếm chỗ` : 'Không có file tải dở'} · xoá cả ảnh thu nhỏ đã lưu</span></div>
         <div class="ctl"><button class="btn btn-ghost btn-sm" id="setCleanup">Dọn dẹp</button></div></div>
     </div>
@@ -1024,8 +1034,19 @@ async function loadSettings() {
   const on = (id, fn) => { const el = $('#' + id); if (el) el.onclick = async () => { try { await fn(el); } catch (err) { toast(err.message); } }; };
   on('setCheckUpd', () => $('#pillStudio').click());
   on('setFolderSave', () => save({ download_folder: $('#setFolder').value.trim() }));
-  on('setConcDown', () => save({ max_concurrent: Math.max(1, s.max_concurrent - 1) }));
-  on('setConcUp', () => save({ max_concurrent: Math.min(5, s.max_concurrent + 1) }));
+  const limit = s.max_concurrent_limit || 50;
+  const setConc = n => save({ max_concurrent: Math.max(1, Math.min(limit, Math.round(n) || 1)) });
+  on('setConcDown', () => setConc(s.max_concurrent - 1));
+  on('setConcUp', () => setConc(s.max_concurrent + 1));
+  const conc = $('#setConc');
+  if (conc) conc.onchange = () => setConc(+conc.value).catch(err => toast(err.message));
+  on('setFolderPick', async btn => {
+    btn.disabled = true;
+    try {
+      const r = await api('/api/pick-folder', { initial: $('#setFolder').value });
+      if (r.folder) { $('#setFolder').value = r.folder; await save({ download_folder: r.folder }); }
+    } finally { btn.disabled = false; }
+  });
   on('setCleanup', async () => { const r = await api('/api/library/cleanup', {}); toast(r.deleted ? `Đã dọn ${r.deleted} file tải dở` : 'Đã dọn ảnh thu nhỏ, không có file tải dở'); loadSettings(); });
   on('setPassword', async () => {
     const pw = await dialog({ title: 'Đặt mật khẩu mới', text: 'Ít nhất 8 ký tự. Mọi thiết bị đang đăng nhập từ xa sẽ phải đăng nhập lại.', input: '', ok: 'Lưu mật khẩu' });

@@ -89,7 +89,9 @@ REMOTE_HOST = (config.get('remote_hostname') or '').lower()
 AUTH_COOKIE = 'studio_auth'
 # Những thao tác chỉ làm được ngay trên máy tính, không làm được qua web
 LOCAL_ONLY = {'/api/open', '/api/library/reveal', '/api/settings', '/api/settings/password',
-              '/api/settings/autostart', '/api/quit', '/api/update/restart'}
+              '/api/settings/autostart', '/api/quit', '/api/update/restart', '/api/pick-folder'}
+MAX_CONCURRENT_LIMIT = 50  # số video tải cùng lúc tối đa
+MAX_LINKS = 500  # số link tối đa mỗi lần dán
 login_failures = []
 
 
@@ -323,7 +325,7 @@ def download_folder():
 
 def max_concurrent():
     try:
-        return max(1, min(5, int(config.get('max_concurrent') or 2)))
+        return max(1, min(MAX_CONCURRENT_LIMIT, int(config.get('max_concurrent') or 2)))
     except (TypeError, ValueError):
         return 2
 
@@ -564,7 +566,7 @@ class Handler(BaseHTTPRequestHandler):
                     os.makedirs(folder, exist_ok=True)
                     cfg['download_folder'] = folder
                 if 'max_concurrent' in data:
-                    cfg['max_concurrent'] = max(1, min(5, int(data['max_concurrent'])))
+                    cfg['max_concurrent'] = max(1, min(MAX_CONCURRENT_LIMIT, int(data['max_concurrent'])))
                 save_config(cfg)
                 config.clear()
                 config.update(cfg)
@@ -580,6 +582,9 @@ class Handler(BaseHTTPRequestHandler):
                 config.clear()
                 config.update(load_config())
                 return self.send_json({'ok': True})
+
+            if path == '/api/pick-folder':
+                return self.send_json({'folder': manager.pick_folder(data.get('initial') or root)})
 
             if path == '/api/settings/autostart':
                 if not manager.autostart_supported():
@@ -653,6 +658,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({
                 'download_folder': root,
                 'max_concurrent': max_concurrent(),
+                'max_concurrent_limit': MAX_CONCURRENT_LIMIT,
                 'disk': manager.disk_info(root),
                 'leftovers': len(manager.leftovers(root)),
                 'autostart': manager.autostart_enabled() if manager.autostart_supported() else None,
@@ -730,7 +736,7 @@ class Handler(BaseHTTPRequestHandler):
             if path in LOCAL_ONLY:
                 return self.send_json({'error': 'Chỉ làm được trên chính máy tính'}, 403)
 
-        if path.startswith('/api/library/') or path.startswith('/api/settings') or path == '/api/quit':
+        if path.startswith('/api/library/') or path.startswith('/api/settings') or path in ('/api/quit', '/api/pick-folder'):
             return self.manage(path, data)
 
         if path == '/api/info':
@@ -749,7 +755,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({'error': 'Chưa nhập link'}, 400)
             options = data.get('options') or {}
             preview = data.get('preview') if len(urls) == 1 else None
-            created = [public_job(start_job(u, options, preview)) for u in urls[:50]]
+            created = [public_job(start_job(u, options, preview)) for u in urls[:MAX_LINKS]]
             self.send_json(created)
 
         elif path == '/api/cancel':
