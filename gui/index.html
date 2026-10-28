@@ -247,6 +247,9 @@
   .update .tx { flex: 1; min-width: 0; }
   .update .tx b { display: block; }
   .update .tx span { color: var(--muted); font-size: 13px; }
+  .remote .local-only { display: none !important; }
+  .saves { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .saves a { text-decoration: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .pill.link { cursor: pointer; }
   .pill.link:hover { color: var(--text); border-color: var(--line-2); }
   [hidden] { display: none !important; }
@@ -264,6 +267,7 @@
     <div class="pills">
       <span class="pill" id="pillFfmpeg"><span class="dot"></span>ffmpeg</span>
       <span class="pill" id="pillVersion">yt-dlp</span>
+      <span class="pill link" id="pillLogout" hidden title="Đăng xuất khỏi thiết bị này">Đăng xuất</span>
       <span class="pill link" id="pillStudio" title="Bấm để kiểm tra bản mới">Studio</span>
     </div>
   </header>
@@ -302,7 +306,7 @@
   <div class="section-head">
     <h3>Danh sách tải <span class="count" id="jobCount">0</span></h3>
     <div style="display:flex;gap:8px">
-      <button class="btn btn-ghost btn-sm" id="btnFolder">
+      <button class="btn btn-ghost btn-sm local-only" id="btnFolder">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
         Mở thư mục
       </button>
@@ -354,7 +358,7 @@
     <div class="row">
       <label>Lưu vào</label>
       <div class="field">
-        <input class="input" id="optFolder" spellcheck="false">
+        <input class="input local-only" id="optFolder" spellcheck="false">
         <select class="input" id="optCookies" title="Dùng cookie của trình duyệt cho video cần đăng nhập / giới hạn tuổi">
           <option value="">Không dùng cookie</option>
           <option value="chrome">Cookie từ Chrome</option>
@@ -381,6 +385,7 @@ const ICON = {
   stop: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
   retry: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>',
+  save: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>',
   video: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="5" width="15" height="14" rx="2"/><path d="M17 10l5-3v10l-5-3"/></svg>',
 };
 
@@ -388,6 +393,7 @@ async function api(path, body) {
   const res = await fetch(path, body === undefined ? {} : {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Studio': '1' }, body: JSON.stringify(body),
   });
+  if (res.status === 401) { location.reload(); throw new Error('Cần đăng nhập'); }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `Lỗi ${res.status}`);
   return data;
@@ -603,11 +609,13 @@ function jobHtml(j) {
       <div class="progress ${indet ? 'indet' : ''}"><div style="width:${j.status === 'done' ? 100 : pct || 0}%"></div></div>
       <div class="stats">${stats.join('')}</div>
       ${j.error ? `<div class="err" title="${esc(j.error)}">${esc(j.error)}</div>` : ''}
+      ${state.config.remote && j.status === 'done' && j.file_names?.length ? `<div class="saves">${j.file_names.map((n, i) =>
+        `<a class="btn btn-ghost btn-sm" href="/api/file?id=${encodeURIComponent(j.id)}&n=${i}" download title="${esc(n)}">${ICON.save} ${j.file_names.length > 1 ? esc(n) : 'Lưu về thiết bị'}</a>`).join('')}</div>` : ''}
     </div>
     <div class="ctrl">
       ${active(j) ? `<button class="icon-btn" data-act="cancel" title="Huỷ">${ICON.stop}</button>` : ''}
       ${['error', 'cancelled'].includes(j.status) ? `<button class="icon-btn" data-act="retry" title="Thử lại">${ICON.retry}</button>` : ''}
-      ${j.folder ? `<button class="icon-btn" data-act="open" title="Mở trong thư mục">${ICON.folder}</button>` : ''}
+      ${j.folder && !state.config.remote ? `<button class="icon-btn" data-act="open" title="Mở trong thư mục">${ICON.folder}</button>` : ''}
     </div>`;
 }
 
@@ -703,6 +711,11 @@ $('#pillStudio').onclick = async () => {
 (async () => {  try {
     state.config = await api('/api/config');
     $('#pillVersion').textContent = 'yt-dlp ' + state.config.version;
+    if (state.config.remote) {
+      document.body.classList.add('remote');
+      $('#pillLogout').hidden = false;
+      $('#pillLogout').onclick = async () => { await api('/api/logout', {}).catch(() => {}); location.reload(); };
+    }
     const p = $('#pillFfmpeg');
     p.querySelector('.dot').classList.add(state.config.ffmpeg ? 'ok' : 'warn');
     p.title = state.config.ffmpeg ? 'Có ffmpeg: ghép video chất lượng cao, chuyển MP3' : 'Không có ffmpeg: chỉ tải được file có sẵn, không chuyển MP3';

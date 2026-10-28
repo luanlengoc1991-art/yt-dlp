@@ -3,6 +3,7 @@
 Chạy: python gui/server.py  (mở http://127.0.0.1:8765 trong trình duyệt)
 """
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -12,9 +13,11 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 import urllib.request
 import uuid
 import webbrowser
+from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -38,6 +41,45 @@ HAS_FFMPEG = shutil.which('ffmpeg') is not None
 JS_RUNTIMES = {name: {} for name in ('deno', 'node', 'bun') if shutil.which(name)} or {'deno': {}}
 QUALITIES = {'best', '2160', '1440', '1080', '720', '480', '360'}
 AUDIO_FORMATS = {'mp3', 'm4a', 'best'}
+
+# ---------------------------------------------------------------- Cấu hình truy cập từ xa
+# studio-config.json nằm cạnh file exe. Có "tunnel" thì app chạy nền liên tục và tự bật cloudflared;
+# mọi truy cập qua tên miền đều phải đăng nhập bằng mật khẩu.
+CONFIG_PATH = (Path(sys.executable).parent if getattr(sys, 'frozen', False) else BASE_DIR.parent) / 'studio-config.json'
+
+
+def load_config():
+    try:
+        return json.loads(CONFIG_PATH.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return {}
+
+
+def save_config(cfg):
+    CONFIG_PATH.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding='utf-8')
+
+
+def hash_password(password, salt):
+    return hashlib.pbkdf2_hmac('sha256', password.encode(), bytes.fromhex(salt), 200_000).hex()
+
+
+def set_password(password):
+    cfg = load_config()
+    cfg['salt'] = os.urandom(16).hex()
+    cfg['password_hash'] = hash_password(password, cfg['salt'])
+    cfg['secret'] = os.urandom(32).hex()  # đổi mật khẩu = đăng xuất mọi thiết bị
+    save_config(cfg)
+
+
+config = load_config()
+REMOTE_HOST = (config.get('remote_hostname') or '').lower()
+AUTH_COOKIE = 'studio_auth'
+login_failures = []
+
+
+def auth_token():
+    return hmac.new(bytes.fromhex(config['secret']), b'studio-auth', 'sha256').hexdigest()
+
 
 jobs = {}
 jobs_lock = threading.Lock()
@@ -250,8 +292,12 @@ def on_postprocess(job, d):
         }
         update_job(job, status='processing', stage=names.get(d.get('postprocessor'), 'Đang xử lý'))
     elif d['status'] == 'finished':
-        path = (d.get('info_dict') or {}).get('filepath')
+        info = d.get('info_dict') or {}
+        path = info.get('filepath')
         if path:
+            # Mỗi video giữ đường dẫn cuối cùng (sau khi ghép/chuyển đổi) để "Lưu về thiết bị"
+            with jobs_lock:
+                job.setdefault('_files', {})[info.get('id') or path] = path
             update_job(job, filepath=path)
 
 
@@ -298,7 +344,9 @@ def start_job(url, options, preview=None):
 
 
 def public_job(job):
-    return {k: v for k, v in job.items() if k not in ('cancel',)}
+    data = {k: v for k, v in job.items() if k != 'cancel' and not k.startswith('_')}
+    data['file_names'] = [os.path.basename(p) for p in (job.get('_files') or {}).values()]
+    return data
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -322,28 +370,101 @@ class Handler(BaseHTTPRequestHandler):
             return {}
         return json.loads(self.rfile.read(length).decode('utf-8'))
 
+    def host(self):
+        return (self.headers.get('Host') or '').split(':')[0].lower()
+
+    def is_remote(self):
+        # Đi qua Cloudflare thì luôn có Cf-Ray, kể cả khi Host bị đổi thành localhost
+        return (self.host() not in ('127.0.0.1', 'localhost')
+                or 'Cf-Ray' in self.headers or 'Cf-Connecting-Ip' in self.headers)
+
     def host_ok(self):
-        host = (self.headers.get('Host') or '').split(':')[0]
-        return host in ('127.0.0.1', 'localhost')
+        return self.host() in ('127.0.0.1', 'localhost') or bool(REMOTE_HOST and self.host() == REMOTE_HOST)
+
+    def authed(self):
+        if not self.is_remote():
+            return True
+        if not config.get('password_hash') or not config.get('secret'):
+            return False
+        cookie = SimpleCookie(self.headers.get('Cookie') or '').get(AUTH_COOKIE)
+        return bool(cookie) and hmac.compare_digest(cookie.value, auth_token())
+
+    def send_page(self, name):
+        body = (BASE_DIR / name).read_bytes()
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.send_header('Content-Length', str(len(body)))
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('X-Frame-Options', 'DENY')
+        self.end_headers()
+        self.wfile.write(body)
+
+    def send_file(self, query):
+        qs = urllib.parse.parse_qs(query)
+        with jobs_lock:
+            job = jobs.get((qs.get('id') or [''])[0])
+            files = list((job or {}).get('_files', {}).values())
+        try:
+            fp = files[int((qs.get('n') or ['0'])[0])]
+        except (ValueError, IndexError):
+            return self.send_error(404)
+        if not os.path.isfile(fp):
+            return self.send_error(404)
+        name = os.path.basename(fp)
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/octet-stream')
+        self.send_header('Content-Length', str(os.path.getsize(fp)))
+        self.send_header('Content-Disposition', f"attachment; filename*=UTF-8''{urllib.parse.quote(name)}")
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        try:
+            with open(fp, 'rb') as f:
+                shutil.copyfileobj(f, self.wfile, 1 << 20)
+        except OSError:
+            pass  # người dùng huỷ tải giữa chừng
+
+    def login(self, data):
+        if not config.get('password_hash'):
+            return self.send_json({'error': 'Chưa đặt mật khẩu cho truy cập từ xa'}, 403)
+        now = time.time()
+        with jobs_lock:
+            login_failures[:] = [t for t in login_failures if now - t < 300]
+            if len(login_failures) >= 5:
+                return self.send_json({'error': 'Sai quá nhiều lần, thử lại sau 5 phút'}, 429)
+        given = hash_password(str(data.get('password') or ''), config['salt'])
+        if not hmac.compare_digest(given, config['password_hash']):
+            with jobs_lock:
+                login_failures.append(now)
+            time.sleep(1)
+            return self.send_json({'error': 'Sai mật khẩu'}, 401)
+        body = b'{"ok": true}'
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(body)))
+        self.send_header('Set-Cookie',
+                         f'{AUTH_COOKIE}={auth_token()}; Max-Age=2592000; Path=/; HttpOnly; Secure; SameSite=Strict')
+        self.end_headers()
+        self.wfile.write(body)
 
     def do_GET(self):
         if not self.host_ok():
             return self.send_error(403)
-        path = self.path.split('?')[0]
+        path, _, query = self.path.partition('?')
+        if not self.authed():
+            if path in ('/', '/index.html'):
+                return self.send_page('login.html')
+            return self.send_json({'error': 'Cần đăng nhập'}, 401)
         if path in ('/', '/index.html'):
-            body = (BASE_DIR / 'index.html').read_bytes()
-            self.send_response(200)
-            self.send_header('Content-Type', 'text/html; charset=utf-8')
-            self.send_header('Content-Length', str(len(body)))
-            self.send_header('Cache-Control', 'no-store')
-            self.end_headers()
-            self.wfile.write(body)
+            self.send_page('index.html')
+        elif path == '/api/file':
+            self.send_file(query)
         elif path == '/api/config':
             self.send_json({
                 'version': YTDLP_VERSION,
                 'ffmpeg': HAS_FFMPEG,
                 'default_folder': DEFAULT_FOLDER,
                 'studio_version': STUDIO_VERSION,
+                'remote': self.is_remote(),
             })
         elif path == '/api/update':
             with jobs_lock:
@@ -383,6 +504,23 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             return self.send_json({'error': 'Dữ liệu không hợp lệ'}, 400)
         path = self.path.split('?')[0]
+
+        if path == '/api/login':
+            return self.login(data)
+        if path == '/api/logout':
+            self.send_response(200)
+            self.send_header('Set-Cookie', f'{AUTH_COOKIE}=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Strict')
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+            return
+        if not self.authed():
+            return self.send_json({'error': 'Cần đăng nhập'}, 401)
+        remote = self.is_remote()
+        if remote:
+            # Từ xa không được chọn thư mục tuỳ ý trên máy hay mở Explorer
+            (data.get('options') or {}).pop('folder', None)
+            if path == '/api/open':
+                return self.send_json({'error': 'Chỉ mở thư mục được trên chính máy tính'}, 403)
 
         if path == '/api/info':
             url = (data.get('url') or '').strip()
@@ -543,9 +681,42 @@ def update_loop():
 
 
 def restart_into_new_version():
-    subprocess.Popen([sys.executable, '--after-update'], close_fds=True,
+    keep = [a for a in sys.argv[1:] if a in ('--background', '--no-browser')]
+    subprocess.Popen([sys.executable, '--after-update', *keep], close_fds=True,
                      creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP)
+    stop_tunnel()
     threading.Timer(0.5, lambda: os._exit(0)).start()
+
+
+# ---------------------------------------------------------------- Cloudflare Tunnel
+tunnel = {'proc': None, 'stop': False}
+
+
+def tunnel_enabled():
+    t = config.get('tunnel') or {}
+    return bool(t.get('cloudflared') and os.path.isfile(t['cloudflared']) and t.get('credentials'))
+
+
+def start_tunnel(port):
+    """Giữ cloudflared chạy suốt thời gian app chạy; tự bật lại nếu nó bị tắt."""
+    t = config['tunnel']
+    args = [t['cloudflared'], 'tunnel', '--no-autoupdate', '--credentials-file', t['credentials'],
+            'run', '--url', f'http://127.0.0.1:{port}', t['name']]
+
+    def loop():
+        while not tunnel['stop']:
+            tunnel['proc'] = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                              creationflags=subprocess.CREATE_NO_WINDOW)
+            tunnel['proc'].wait()
+            time.sleep(10)
+
+    threading.Thread(target=loop, daemon=True).start()
+
+
+def stop_tunnel():
+    tunnel['stop'] = True
+    if tunnel['proc'] and tunnel['proc'].poll() is None:
+        tunnel['proc'].terminate()
 
 
 def studio_running(port):
@@ -610,6 +781,11 @@ def main():
         if getattr(sys, name) is None:
             setattr(sys, name, open(os.devnull, 'w', encoding='utf-8'))
 
+    if '--set-password' in sys.argv:
+        # yt-dlp-studio.exe --set-password "mật khẩu mới"
+        set_password(sys.argv[sys.argv.index('--set-password') + 1])
+        return
+
     after_update = '--after-update' in sys.argv
     if after_update:
         # Chờ bản cũ nhả cổng; cửa sổ đang mở sẽ tự kết nối lại và tải lại trang
@@ -622,7 +798,8 @@ def main():
 
     port, already = find_port()
     url = f'http://127.0.0.1:{port}'
-    no_window = '--no-browser' in sys.argv
+    # --background: chạy nền khi khởi động Windows, không mở cửa sổ
+    no_window = '--no-browser' in sys.argv or '--background' in sys.argv
     if already:
         if not no_window:
             open_window(url)
@@ -630,10 +807,13 @@ def main():
     server = ThreadingHTTPServer(('127.0.0.1', port), Handler)
     print(f'yt-dlp Studio {STUDIO_VERSION} đang chạy tại {url}')
     threading.Thread(target=update_loop, daemon=True).start()
-    if not no_window:
+    if tunnel_enabled():
+        # Có tunnel: chạy liên tục để truy cập được từ xa, không tự tắt khi đóng cửa sổ
+        start_tunnel(port)
+    elif not no_window:
         threading.Thread(target=watchdog, daemon=True).start()
-        if not after_update:
-            threading.Timer(0.3, open_window, args=(url,)).start()
+    if not no_window and not after_update:
+        threading.Timer(0.3, open_window, args=(url,)).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:

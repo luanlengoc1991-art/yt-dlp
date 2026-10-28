@@ -40,7 +40,7 @@ Step 'Build exe'
 & $py -m PyInstaller --noconfirm --onefile --windowed --log-level WARN --name yt-dlp-studio `
     --icon "$PSScriptRoot\devscripts\logo.ico" `
     --additional-hooks-dir="$PSScriptRoot\yt_dlp\__pyinstaller" `
-    --add-data "$PSScriptRoot\gui\index.html:gui" `
+    --add-data "$PSScriptRoot\gui\index.html:gui" --add-data "$PSScriptRoot\gui\login.html:gui" `
     --exclude-module setuptools --distpath dist --workpath build/studio --specpath build/studio gui/server.py
 Check 'PyInstaller'
 $exe = Join-Path $PSScriptRoot 'dist\yt-dlp-studio.exe'

@@ -138,3 +138,4 @@ site/public/yt-dlp-studio.exe
 site/.wrangler/
 *.new.exe
 *.old.exe
+studio-config.json
