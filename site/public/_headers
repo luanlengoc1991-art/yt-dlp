@@ -1,0 +1,7 @@
+/latest.json
+  Cache-Control: no-store
+  Access-Control-Allow-Origin: *
+
+/yt-dlp-studio.exe
+  Cache-Control: no-cache
+  Content-Disposition: attachment; filename="yt-dlp-studio.exe"

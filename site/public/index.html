@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>yt-dlp Studio · Tải video & âm thanh</title>
+<meta name="description" content="Ứng dụng Windows tải video và âm thanh từ YouTube, TikTok, Facebook, Instagram… Dán link, chọn chất lượng, tải về. Tự cập nhật.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%23ff4d6a'/%3E%3Cpath d='M12 5v9M8 10l4 4 4-4M7 18h10' stroke='white' stroke-width='2.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+  :root { --bg:#0a0b10; --panel:#12141c; --line:#242838; --text:#eef0f6; --muted:#8b90a5; --dim:#5d6278; --grad:linear-gradient(135deg,#ff4d6a,#ff8a4c); }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:"Segoe UI","Be Vietnam Pro",system-ui,-apple-system,Roboto,sans-serif; background:var(--bg); color:var(--text); line-height:1.55; }
+  body::before { content:""; position:fixed; inset:0; pointer-events:none;
+    background: radial-gradient(800px 420px at 15% -10%, rgba(255,77,106,.18), transparent 70%), radial-gradient(700px 400px at 95% 0%, rgba(255,138,76,.12), transparent 70%); }
+  .wrap { position:relative; max-width:1040px; margin:0 auto; padding:24px 24px 64px; }
+  nav { display:flex; align-items:center; justify-content:space-between; }
+  .brand { display:flex; gap:10px; align-items:center; font-weight:700; }
+  .logo { width:36px; height:36px; border-radius:11px; background:var(--grad); display:grid; place-items:center; box-shadow:0 8px 22px rgba(255,77,106,.35); }
+  .logo svg { width:18px; height:18px; }
+  nav a { color:var(--muted); text-decoration:none; font-size:14px; }
+  nav a:hover { color:var(--text); }
+  .hero { padding:72px 0 40px; text-align:center; }
+  .tag { display:inline-flex; gap:8px; align-items:center; font-size:13px; color:var(--muted); border:1px solid var(--line); background:var(--panel); padding:5px 12px; border-radius:99px; }
+  .tag i { width:7px; height:7px; border-radius:50%; background:#3ddc97; box-shadow:0 0 8px #3ddc97; }
+  h1 { font-size:clamp(34px,6vw,62px); line-height:1.08; letter-spacing:-.03em; margin:22px 0 16px; }
+  h1 em { font-style:normal; background:var(--grad); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .lead { color:var(--muted); font-size:18px; max-width:620px; margin:0 auto 34px; }
+  .cta { display:inline-flex; gap:10px; align-items:center; padding:16px 28px; border-radius:16px; background:var(--grad); color:#fff; font-weight:700; font-size:17px; text-decoration:none; box-shadow:0 14px 36px rgba(255,77,106,.4); transition:transform .15s, filter .2s; }
+  .cta:hover { filter:brightness(1.07); transform:translateY(-1px); }
+  .cta svg { width:20px; height:20px; }
+  .meta { color:var(--dim); font-size:13px; margin-top:14px; }
+  .shot { margin:56px auto 0; max-width:900px; border-radius:18px; border:1px solid var(--line); background:var(--panel); padding:18px; box-shadow:0 30px 80px rgba(0,0,0,.5); text-align:left; }
+  .bar { display:flex; gap:10px; padding:8px; border:1px solid #2f3447; border-radius:16px; background:#0e1016; align-items:center; }
+  .bar .u { flex:1; color:var(--dim); padding:0 10px; font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .bar .b { background:var(--grad); color:#fff; font-weight:600; padding:10px 18px; border-radius:11px; font-size:14px; }
+  .row { display:grid; grid-template-columns:150px 1fr; gap:16px; margin-top:16px; align-items:center; }
+  .th { aspect-ratio:16/9; border-radius:10px; background:linear-gradient(135deg,#2a1d2a,#1b2232); }
+  .chips { display:flex; gap:8px; flex-wrap:wrap; }
+  .chips span { border:1px solid #2f3447; border-radius:99px; padding:5px 12px; font-size:13px; font-weight:600; }
+  .chips span.on { background:var(--grad); border-color:transparent; }
+  .prog { height:6px; border-radius:99px; background:#1d2130; margin-top:12px; overflow:hidden; }
+  .prog div { width:62%; height:100%; background:var(--grad); }
+  .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:72px; }
+  .f { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:22px; }
+  .f b { display:block; margin:12px 0 4px; font-size:16px; }
+  .f p { margin:0; color:var(--muted); font-size:14px; }
+  .f .i { width:36px; height:36px; border-radius:10px; display:grid; place-items:center; background:rgba(255,77,106,.12); color:#ff6b80; }
+  .f .i svg { width:18px; height:18px; }
+  h2 { font-size:26px; letter-spacing:-.02em; margin:72px 0 18px; }
+  ol { color:var(--muted); padding-left:20px; margin:0; }
+  ol li { margin:8px 0; }
+  ol b { color:var(--text); }
+  .note { margin-top:18px; padding:14px 16px; border-radius:12px; background:var(--panel); border:1px solid var(--line); color:var(--muted); font-size:14px; }
+  footer { margin-top:72px; padding-top:24px; border-top:1px solid var(--line); color:var(--dim); font-size:13px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+  footer a { color:var(--muted); }
+  @media (max-width:760px) { .grid { grid-template-columns:1fr; } .row { grid-template-columns:1fr; } .hero { padding-top:48px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <div class="brand"><div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg></div>yt-dlp Studio</div>
+    <a href="https://github.com/luanlengoc1991-art/yt-dlp/tree/studio" target="_blank" rel="noopener">Mã nguồn</a>
+  </nav>
+
+  <section class="hero">
+    <span class="tag"><i></i><span id="ver">Phiên bản mới nhất</span></span>
+    <h1>Dán link, chọn chất lượng,<br><em>tải về.</em></h1>
+    <p class="lead">Ứng dụng Windows tải video và âm thanh từ YouTube, TikTok, Facebook, Instagram, X, SoundCloud và hơn 1.800 trang khác. Tự cập nhật khi có bản mới.</p>
+    <a class="cta" href="/yt-dlp-studio.exe" download>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
+      Tải cho Windows
+    </a>
+    <div class="meta" id="meta">Windows 10 / 11 · 64-bit · không cần cài đặt</div>
+
+    <div class="shot" aria-hidden="true">
+      <div class="bar"><span class="u">https://www.youtube.com/watch?v=…</span><span class="b">Phân tích</span></div>
+      <div class="row">
+        <div class="th"></div>
+        <div>
+          <div class="chips"><span class="on">Tốt nhất 4K</span><span>1080p</span><span>720p</span><span>MP3</span></div>
+          <div class="prog"><div></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="grid">
+    <div class="f"><div class="i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="15" height="14" rx="2"/><path d="M17 10l5-3v10l-5-3"/></svg></div><b>Video đến 4K</b><p>Chỉ hiện độ phân giải video thật sự có, kèm dung lượng ước tính. Ưu tiên MP4 mở được mọi nơi.</p></div>
+    <div class="f"><div class="i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div><b>Chỉ âm thanh</b><p>Xuất MP3 chất lượng cao, M4A hoặc định dạng gốc, có ảnh bìa và thông tin bài.</p></div>
+    <div class="f"><div class="i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></div><b>Playlist & nhiều link</b><p>Tải cả playlist, chọn mục cần tải, hoặc dán nhiều link một lần.</p></div>
+    <div class="f"><div class="i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h10M4 17h7"/></svg></div><b>Phụ đề</b><p>Tự lấy phụ đề tiếng Việt và tiếng Anh, nhúng thẳng vào video.</p></div>
+    <div class="f"><div class="i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></div><b>Tự cập nhật</b><p>App tự tải bản mới ở chế độ nền. Bấm "Cập nhật ngay" hoặc mở lại app là xong.</p></div>
+    <div class="f"><div class="i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div><b>Chạy trên máy bạn</b><p>Không cần tài khoản, không gửi dữ liệu đi đâu. Video lưu thẳng vào máy.</p></div>
+  </div>
+
+  <h2>Cài đặt</h2>
+  <ol>
+    <li>Bấm <b>Tải cho Windows</b>, đặt file <b>yt-dlp-studio.exe</b> vào thư mục cố định (ví dụ D:\Apps).</li>
+    <li>Nháy đúp để mở. Lần đầu Windows có thể hiện <b>"Windows protected your PC"</b>: bấm <b>More info → Run anyway</b>.</li>
+    <li>Dán link vào ô, chọn chất lượng, bấm <b>Tải xuống</b>.</li>
+  </ol>
+  <div class="note">Nên cài thêm <b>ffmpeg</b> (mở PowerShell, chạy <code>winget install ffmpeg</code>) để tải được video chất lượng cao nhất và chuyển sang MP3. Không có ffmpeg, app vẫn tải được video ở mức chất lượng có sẵn.</div>
+
+  <footer>
+    <span>yt-dlp Studio · dựa trên <a href="https://github.com/yt-dlp/yt-dlp" target="_blank" rel="noopener">yt-dlp</a> (Unlicense)</span>
+    <span id="date"></span>
+  </footer>
+</div>
+<script>
+fetch('/latest.json', { cache: 'no-store' }).then(r => r.json()).then(m => {
+  document.getElementById('ver').textContent = 'Phiên bản ' + m.version;
+  const mb = m.size ? (m.size / 1048576).toFixed(1) + ' MB · ' : '';
+  document.getElementById('meta').textContent = mb + 'Windows 10 / 11 · 64-bit · không cần cài đặt';
+  if (m.date) document.getElementById('date').textContent = 'Cập nhật ' + new Date(m.date).toLocaleDateString('vi-VN');
+}).catch(() => {});
+</script>
+</body>
+</html>

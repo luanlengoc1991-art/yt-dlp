@@ -132,3 +132,9 @@ yt-dlp-plugins
 
 # Packages
 yt_dlp_ejs/
+
+# yt-dlp Studio
+site/public/yt-dlp-studio.exe
+site/.wrangler/
+*.new.exe
+*.old.exe

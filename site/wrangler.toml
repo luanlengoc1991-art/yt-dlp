@@ -1,0 +1,6 @@
+name = "ytdlp-studio"
+compatibility_date = "2026-10-01"
+routes = [{ pattern = "ytdlp.luangroup.asia", custom_domain = true }]
+
+[assets]
+directory = "./public"
