@@ -22,6 +22,16 @@ from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+if (getattr(sys, 'frozen', False) and '--after-update' in sys.argv
+        and os.environ.get('YTDLP_STUDIO_CLEAN') != '1'):
+    # Bản cũ (<= 1.2.0) khởi động lại mà không reset môi trường PyInstaller, nên tiến trình này
+    # đang dùng chung thư mục tạm của bản cũ (sẽ bị xoá khi bản cũ thoát). Chạy lại một bản sạch.
+    # YTDLP_STUDIO_CLEAN đánh dấu bản đã sạch (PyInstaller tự xoá biến PYINSTALLER_RESET_ENVIRONMENT).
+    subprocess.Popen([sys.executable, *sys.argv[1:]], close_fds=True,
+                     env=dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT='1', YTDLP_STUDIO_CLEAN='1'),
+                     creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP)
+    sys.exit(0)
+
 if getattr(sys, 'frozen', False):
     BASE_DIR = Path(sys._MEIPASS) / 'gui'
 else:
@@ -883,7 +893,9 @@ def update_loop():
 
 def restart_into_new_version():
     keep = [a for a in sys.argv[1:] if a in ('--background', '--no-browser')]
+    # PYINSTALLER_RESET_ENVIRONMENT: bản mới tự giải nén riêng, không dùng thư mục tạm của bản này
     subprocess.Popen([sys.executable, '--after-update', *keep], close_fds=True,
+                     env=dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT='1', YTDLP_STUDIO_CLEAN='1'),
                      creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP)
     stop_tunnel()
     threading.Timer(0.5, lambda: os._exit(0)).start()
