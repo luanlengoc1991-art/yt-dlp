@@ -139,3 +139,4 @@ site/.wrangler/
 *.new.exe
 *.old.exe
 studio-config.json
+cache/

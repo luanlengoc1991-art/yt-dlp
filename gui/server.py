@@ -5,6 +5,7 @@ Chạy: python gui/server.py  (mở http://127.0.0.1:8765 trong trình duyệt)
 import hashlib
 import hmac
 import json
+import mimetypes
 import os
 import re
 import shutil
@@ -32,11 +33,12 @@ import yt_dlp  # noqa: E402
 from yt_dlp.utils import DownloadCancelled  # noqa: E402
 from yt_dlp.version import __version__ as YTDLP_VERSION  # noqa: E402
 
+import manager  # noqa: E402
 from studio_version import STUDIO_VERSION, UPDATE_URL  # noqa: E402
 
 # Máy nào có ổ D thì lưu ở D, không thì vào thư mục Downloads của người dùng
 DEFAULT_FOLDER = r'D:\Downloads\yt-dlp' if os.path.isdir('D:\\') else str(Path.home() / 'Downloads' / 'yt-dlp')
-PORT = 8765
+PORT = int(os.environ.get('YTDLP_STUDIO_PORT') or 8765)  # đổi cổng chỉ để chạy thử
 HAS_FFMPEG = shutil.which('ffmpeg') is not None
 JS_RUNTIMES = {name: {} for name in ('deno', 'node', 'bun') if shutil.which(name)} or {'deno': {}}
 QUALITIES = {'best', '2160', '1440', '1080', '720', '480', '360'}
@@ -46,6 +48,7 @@ AUDIO_FORMATS = {'mp3', 'm4a', 'best'}
 # studio-config.json nằm cạnh file exe. Có "tunnel" thì app chạy nền liên tục và tự bật cloudflared;
 # mọi truy cập qua tên miền đều phải đăng nhập bằng mật khẩu.
 CONFIG_PATH = (Path(sys.executable).parent if getattr(sys, 'frozen', False) else BASE_DIR.parent) / 'studio-config.json'
+THUMB_DIR = CONFIG_PATH.parent / 'cache' / 'thumbs'
 
 
 def load_config():
@@ -74,6 +77,9 @@ def set_password(password):
 config = load_config()
 REMOTE_HOST = (config.get('remote_hostname') or '').lower()
 AUTH_COOKIE = 'studio_auth'
+# Những thao tác chỉ làm được ngay trên máy tính, không làm được qua web
+LOCAL_ONLY = {'/api/open', '/api/library/reveal', '/api/settings', '/api/settings/password',
+              '/api/settings/autostart', '/api/quit', '/api/update/restart'}
 login_failures = []
 
 
@@ -178,7 +184,7 @@ def build_opts(job, options):
     audio_format = options.get('audio_format', 'mp3')
     if audio_format not in AUDIO_FORMATS:
         audio_format = 'mp3'
-    folder = options.get('folder') or DEFAULT_FOLDER
+    folder = options.get('folder') or download_folder()
     os.makedirs(folder, exist_ok=True)
 
     postprocessors = []
@@ -301,7 +307,49 @@ def on_postprocess(job, d):
             update_job(job, filepath=path)
 
 
+def download_folder():
+    return config.get('download_folder') or DEFAULT_FOLDER
+
+
+def max_concurrent():
+    try:
+        return max(1, min(5, int(config.get('max_concurrent') or 2)))
+    except (TypeError, ValueError):
+        return 2
+
+
+# Hàng chờ: chỉ cho tối đa max_concurrent() video tải cùng lúc, các video khác chờ lượt
+queue_cond = threading.Condition()
+running = {'count': 0}
+
+
+def wait_for_slot(job):
+    with queue_cond:
+        while running['count'] >= max_concurrent():
+            if job['cancel']:
+                return False
+            queue_cond.wait(1)
+        running['count'] += 1
+        return True
+
+
+def release_slot():
+    with queue_cond:
+        running['count'] -= 1
+        queue_cond.notify_all()
+
+
 def run_job(job, options):
+    if not wait_for_slot(job):
+        update_job(job, status='cancelled')
+        return
+    try:
+        _run_job(job, options)
+    finally:
+        release_slot()
+
+
+def _run_job(job, options):
     try:
         opts, folder = build_opts(job, options)
         update_job(job, folder=folder, status='starting')
@@ -408,20 +456,137 @@ class Handler(BaseHTTPRequestHandler):
             fp = files[int((qs.get('n') or ['0'])[0])]
         except (ValueError, IndexError):
             return self.send_error(404)
-        if not os.path.isfile(fp):
+        self.send_media(fp, attachment=True)
+
+    def send_media(self, fp, attachment=False, content_type=None):
+        """Gửi file, hỗ trợ Range để trình duyệt tua được video."""
+        if not fp or not os.path.isfile(fp):
             return self.send_error(404)
-        name = os.path.basename(fp)
-        self.send_response(200)
-        self.send_header('Content-Type', 'application/octet-stream')
-        self.send_header('Content-Length', str(os.path.getsize(fp)))
-        self.send_header('Content-Disposition', f"attachment; filename*=UTF-8''{urllib.parse.quote(name)}")
-        self.send_header('Cache-Control', 'no-store')
+        size = os.path.getsize(fp)
+        start, end, status = 0, size - 1, 200
+        m = re.fullmatch(r'bytes=(\d*)-(\d*)', (self.headers.get('Range') or '').strip())
+        if m and (m[1] or m[2]):
+            if m[1]:
+                start, end = int(m[1]), int(m[2]) if m[2] else size - 1
+            else:
+                start = max(0, size - int(m[2]))
+            end = min(end, size - 1)
+            if start > end:
+                self.send_response(416)
+                self.send_header('Content-Range', f'bytes */{size}')
+                self.send_header('Content-Length', '0')
+                self.end_headers()
+                return
+            status = 206
+        self.send_response(status)
+        if attachment:
+            self.send_header('Content-Type', 'application/octet-stream')
+            name = urllib.parse.quote(os.path.basename(fp))
+            self.send_header('Content-Disposition', f"attachment; filename*=UTF-8''{name}")
+        else:
+            self.send_header('Content-Type', content_type or mimetypes.guess_type(fp)[0] or 'application/octet-stream')
+        self.send_header('Accept-Ranges', 'bytes')
+        self.send_header('Content-Length', str(end - start + 1))
+        if status == 206:
+            self.send_header('Content-Range', f'bytes {start}-{end}/{size}')
+        self.send_header('Cache-Control', 'private, max-age=3600' if content_type == 'image/jpeg' else 'no-store')
         self.end_headers()
+        if self.command == 'HEAD':
+            return
         try:
             with open(fp, 'rb') as f:
-                shutil.copyfileobj(f, self.wfile, 1 << 20)
+                f.seek(start)
+                remaining = end - start + 1
+                while remaining > 0:
+                    chunk = f.read(min(1 << 20, remaining))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    remaining -= len(chunk)
         except OSError:
-            pass  # người dùng huỷ tải giữa chừng
+            pass  # người dùng huỷ tải / tua sang chỗ khác
+
+    def library_path(self, query):
+        rel = (urllib.parse.parse_qs(query).get('path') or [''])[0]
+        target = manager.resolve_in(download_folder(), rel)
+        return target if target and target.is_file() else None
+
+    def manage(self, path, data):
+        """Thao tác của Thư viện và Cài đặt."""
+        root = download_folder()
+
+        def targets():
+            out = []
+            for rel in data.get('paths') or [data.get('path')]:
+                t = manager.resolve_in(root, rel or '')
+                if not t or not t.is_file():
+                    raise FileNotFoundError(rel)
+                out.append(t)
+            return out
+
+        try:
+            if path == '/api/library/delete':
+                files = targets()
+                if not manager.send_to_recycle_bin(files):
+                    return self.send_json({'error': 'Không xoá được (file đang mở?)'}, 409)
+                return self.send_json({'ok': True, 'deleted': len(files)})
+
+            if path == '/api/library/rename':
+                new = manager.rename(targets()[0], data.get('name'))
+                return self.send_json({'ok': True, 'path': new.relative_to(Path(root).resolve()).as_posix()})
+
+            if path == '/api/library/reveal':
+                subprocess.Popen(['explorer', '/select,', str(targets()[0])])
+                return self.send_json({'ok': True})
+
+            if path == '/api/library/cleanup':
+                files = manager.leftovers(root)
+                ok = manager.send_to_recycle_bin(files)
+                shutil.rmtree(THUMB_DIR, ignore_errors=True)
+                return self.send_json({'ok': ok, 'deleted': len(files) if ok else 0})
+
+            if path == '/api/settings':
+                cfg = load_config()
+                if 'download_folder' in data:
+                    folder = str(data['download_folder'] or '').strip()
+                    if not folder or not os.path.isabs(folder):
+                        return self.send_json({'error': 'Hãy nhập đường dẫn đầy đủ, ví dụ D:\\Downloads\\yt-dlp'}, 400)
+                    os.makedirs(folder, exist_ok=True)
+                    cfg['download_folder'] = folder
+                if 'max_concurrent' in data:
+                    cfg['max_concurrent'] = max(1, min(5, int(data['max_concurrent'])))
+                save_config(cfg)
+                config.clear()
+                config.update(cfg)
+                with queue_cond:
+                    queue_cond.notify_all()
+                return self.send_json({'ok': True})
+
+            if path == '/api/settings/password':
+                password = str(data.get('password') or '')
+                if len(password) < 8:
+                    return self.send_json({'error': 'Mật khẩu cần ít nhất 8 ký tự'}, 400)
+                set_password(password)
+                config.clear()
+                config.update(load_config())
+                return self.send_json({'ok': True})
+
+            if path == '/api/settings/autostart':
+                if not manager.autostart_supported():
+                    return self.send_json({'error': 'Chỉ dùng được với bản exe'}, 400)
+                manager.set_autostart(bool(data.get('enabled')))
+                return self.send_json({'ok': True, 'enabled': manager.autostart_enabled()})
+
+            if path == '/api/quit':
+                self.send_json({'ok': True})
+                stop_tunnel()
+                threading.Timer(0.5, lambda: os._exit(0)).start()
+                return None
+        except FileNotFoundError:
+            return self.send_json({'error': 'Không tìm thấy file (có thể đã bị xoá hoặc đổi tên)'}, 404)
+        except (ValueError, OSError) as e:
+            return self.send_json({'error': str(e)}, 400)
+        return self.send_error(404)
 
     def login(self, data):
         if not config.get('password_hash'):
@@ -458,11 +623,44 @@ class Handler(BaseHTTPRequestHandler):
             self.send_page('index.html')
         elif path == '/api/file':
             self.send_file(query)
+        elif path == '/api/library':
+            root = download_folder()
+            files = manager.list_files(root)
+            self.send_json({'folder': root, 'files': files, 'disk': manager.disk_info(root),
+                            'total_size': sum(f['size'] for f in files)})
+        elif path == '/api/library/stream':
+            self.send_media(self.library_path(query))
+        elif path == '/api/library/download':
+            self.send_media(self.library_path(query), attachment=True)
+        elif path == '/api/library/thumb':
+            fp = self.library_path(query)
+            thumb = manager.thumbnail(fp, THUMB_DIR) if fp else None
+            if not thumb:
+                return self.send_error(404)
+            self.send_media(str(thumb), content_type='image/jpeg')
+        elif path == '/api/settings':
+            root = download_folder()
+            self.send_json({
+                'download_folder': root,
+                'max_concurrent': max_concurrent(),
+                'disk': manager.disk_info(root),
+                'leftovers': len(manager.leftovers(root)),
+                'autostart': manager.autostart_enabled() if manager.autostart_supported() else None,
+                'remote_host': REMOTE_HOST or None,
+                'tunnel_configured': tunnel_enabled(),
+                'tunnel_running': bool(tunnel['proc'] and tunnel['proc'].poll() is None),
+                'has_password': bool(config.get('password_hash')),
+                'studio_version': STUDIO_VERSION,
+                'ytdlp_version': YTDLP_VERSION,
+                'ffmpeg': HAS_FFMPEG,
+                'app_path': sys.executable if getattr(sys, 'frozen', False) else None,
+                'is_remote': self.is_remote(),
+            })
         elif path == '/api/config':
             self.send_json({
                 'version': YTDLP_VERSION,
                 'ffmpeg': HAS_FFMPEG,
-                'default_folder': DEFAULT_FOLDER,
+                'default_folder': download_folder(),
                 'studio_version': STUDIO_VERSION,
                 'remote': self.is_remote(),
             })
@@ -519,8 +717,11 @@ class Handler(BaseHTTPRequestHandler):
         if remote:
             # Từ xa không được chọn thư mục tuỳ ý trên máy hay mở Explorer
             (data.get('options') or {}).pop('folder', None)
-            if path == '/api/open':
-                return self.send_json({'error': 'Chỉ mở thư mục được trên chính máy tính'}, 403)
+            if path in LOCAL_ONLY:
+                return self.send_json({'error': 'Chỉ làm được trên chính máy tính'}, 403)
+
+        if path.startswith('/api/library/') or path.startswith('/api/settings') or path == '/api/quit':
+            return self.manage(path, data)
 
         if path == '/api/info':
             url = (data.get('url') or '').strip()
