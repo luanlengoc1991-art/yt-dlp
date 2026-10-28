@@ -1,8 +1,8 @@
 {
-    "version":  "1.3.1",
+    "version":  "1.4.0",
     "url":  "https://ytdlp.luangroup.asia/yt-dlp-studio.exe",
-    "sha256":  "65339005b57c22ff5914840a16c404d14aa25a228b25fbbc1b174992c3811c07",
-    "size":  18867983,
-    "notes":  "Hien nut Tai app tren web va trang ytdlp.luangroup.asia/tai-app",
-    "date":  "2026-10-28T08:36:04Z"
+    "sha256":  "e4167e3280647d0e0e5ae08fbb3b96483c22f160ba96aa07c2a32375ed6df864",
+    "size":  18870650,
+    "notes":  "Giao dien moi xanh neon; thu vien dong bo voi thu muc that; hien ro noi luu; video moi len dau; app rong hon",
+    "date":  "2026-10-28T08:57:18Z"
 }
