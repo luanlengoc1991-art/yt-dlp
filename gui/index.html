@@ -351,6 +351,10 @@
   .saves { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .saves a { text-decoration: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .pill.link { cursor: pointer; }
+  a.pill { text-decoration: none; }
+  .pill.getapp { background: var(--grad); border-color: transparent; color: #fff; font-weight: 600; }
+  .pill.getapp:hover { color: #fff; filter: brightness(1.08); }
+  .pill.getapp svg { width: 13px; height: 13px; }
   .pill.link:hover { color: var(--text); border-color: var(--line-2); }
   [hidden] { display: none !important; }
 </style>
@@ -367,6 +371,8 @@
     <div class="pills">
       <span class="pill" id="pillFfmpeg"><span class="dot"></span>ffmpeg</span>
       <span class="pill" id="pillVersion">yt-dlp</span>
+      <a class="pill link getapp" id="pillGetApp" hidden href="/tai-app" target="_blank" rel="noopener" title="Tải yt-dlp Studio về máy tính Windows">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>Tải app Windows</a>
       <span class="pill link" id="pillLogout" hidden title="Đăng xuất khỏi thiết bị này">Đăng xuất</span>
       <span class="pill link" id="pillStudio" title="Bấm để kiểm tra bản mới">Studio</span>
     </div>
@@ -824,6 +830,8 @@ $('#btnFolder').onclick = async () => {
   catch (err) { toast(err.message); }
 };
 
+const APP_PAGE = 'https://ytdlp.luangroup.asia/tai-app';
+
 /* --- Tabs --- */
 const views = { download: '#viewDownload', library: '#viewLibrary', settings: '#viewSettings' };
 function showView(name) {
@@ -1003,6 +1011,9 @@ async function loadSettings() {
     <div class="sgroup"><h4>Ứng dụng</h4>
       <div class="srow"><div class="lbl"><b>yt-dlp Studio ${esc(s.studio_version)}</b><span>Bộ tải yt-dlp ${esc(s.ytdlp_version)}${s.app_path ? ' · ' + esc(s.app_path) : ''}</span></div>
         <div class="ctl"><button class="btn btn-ghost btn-sm" id="setCheckUpd">Kiểm tra cập nhật</button></div></div>
+      <div class="srow"><div class="lbl"><b>Chia sẻ app</b><span>${esc(APP_PAGE)} · trang tải app cho máy Windows khác, luôn mở được</span></div>
+        <div class="ctl"><button class="btn btn-ghost btn-sm" id="setCopyLink">Sao chép link</button>
+          <a class="btn btn-ghost btn-sm" href="${esc(APP_PAGE)}" target="_blank" rel="noopener">Mở trang</a></div></div>
       <div class="srow"><div class="lbl"><b>ffmpeg</b><span>Cần để ghép video chất lượng cao và chuyển sang MP3</span></div>
         <div class="ctl">${dot(s.ffmpeg, 'Đã cài', 'Chưa cài · chạy: winget install ffmpeg')}</div></div>
       <div class="srow"><div class="lbl"><b>Khởi động cùng Windows</b><span>App chạy nền ngay khi bật máy (cần cho truy cập từ xa)</span></div>
@@ -1033,6 +1044,10 @@ async function loadSettings() {
   const save = async body => { await api('/api/settings', body); toast('Đã lưu'); state.config.default_folder = body.download_folder ?? state.config.default_folder; loadSettings(); };
   const on = (id, fn) => { const el = $('#' + id); if (el) el.onclick = async () => { try { await fn(el); } catch (err) { toast(err.message); } }; };
   on('setCheckUpd', () => $('#pillStudio').click());
+  on('setCopyLink', async () => {
+    try { await navigator.clipboard.writeText(APP_PAGE); toast('Đã sao chép: ' + APP_PAGE); }
+    catch { await dialog({ title: 'Link tải app', input: APP_PAGE, ok: 'Đóng' }); }
+  });
   on('setFolderSave', () => save({ download_folder: $('#setFolder').value.trim() }));
   const limit = s.max_concurrent_limit || 50;
   const setConc = n => save({ max_concurrent: Math.max(1, Math.min(limit, Math.round(n) || 1)) });
@@ -1117,6 +1132,7 @@ $('#pillStudio').onclick = async () => {
     if (state.config.remote) {
       document.body.classList.add('remote');
       $('#pillLogout').hidden = false;
+      $('#pillGetApp').hidden = false;
       $('#pillLogout').onclick = async () => { await api('/api/logout', {}).catch(() => {}); location.reload(); };
     }
     const p = $('#pillFfmpeg');

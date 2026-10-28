@@ -22,8 +22,13 @@
   button { width:100%; height:48px; margin-top:14px; border:0; border-radius:12px; background:var(--grad); color:#fff; font:inherit; font-weight:700; font-size:16px; cursor:pointer; }
   button:disabled { opacity:.6; }
   .err { color:#ff9aa5; font-size:14px; min-height:20px; margin-top:12px; }
-  .get { display:block; text-align:center; margin-top:10px; padding-top:16px; border-top:1px solid #242838; color:var(--muted); font-size:13px; text-decoration:none; }
-  .get:hover { color:var(--text); }
+  .get { display:grid; gap:10px; text-align:center; margin-top:12px; padding-top:18px; border-top:1px solid #242838; color:var(--muted); font-size:13px; }
+  .getbtn { display:flex; align-items:center; justify-content:center; gap:8px; height:46px; border-radius:12px; border:1px solid var(--line);
+    background:#181b26; color:var(--text); font-weight:700; font-size:15px; text-decoration:none; }
+  .getbtn:hover { background:#20243a; }
+  .getbtn svg { width:18px; height:18px; }
+  .more { color:var(--muted); font-size:13px; }
+  .more:hover { color:var(--text); }
 </style>
 </head>
 <body>
@@ -34,7 +39,14 @@
   <input id="pw" type="password" placeholder="Mật khẩu" autocomplete="current-password" autofocus required>
   <button id="btn">Đăng nhập</button>
   <div class="err" id="err"></div>
-  <a class="get" href="/yt-dlp-studio.exe" download>Chưa có app? Tải yt-dlp Studio cho Windows</a>
+  <div class="get">
+    <span>Chưa có app trên máy tính?</span>
+    <a class="getbtn" href="/yt-dlp-studio.exe" download>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
+      Tải app cho Windows
+    </a>
+    <a class="more" href="/tai-app">Xem giới thiệu & hướng dẫn cài</a>
+  </div>
 </form>
 <script>
 document.getElementById('f').onsubmit = async e => {

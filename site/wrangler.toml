@@ -5,6 +5,8 @@ compatibility_date = "2026-10-01"
 routes = [
   { pattern = "ytdlp.luangroup.asia/latest.json*", zone_name = "luangroup.asia" },
   { pattern = "ytdlp.luangroup.asia/yt-dlp-studio.exe*", zone_name = "luangroup.asia" },
+  # Trang giới thiệu + nút tải app (luôn mở được, kể cả khi máy nhà tắt)
+  { pattern = "ytdlp.luangroup.asia/tai-app*", zone_name = "luangroup.asia" },
 ]
 
 [assets]
