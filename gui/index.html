@@ -320,6 +320,48 @@
   .savebar b { display: block; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #viewLibrary .savebar { margin: 0 0 16px; }
   #btnFolder { display: none; }
+
+  /* ===== Khu nhập link: khối nổi bật nhất trang ===== */
+  .hero {
+    position: relative; padding: 26px 28px 22px; border-radius: 28px;
+    border: 1px solid rgba(126,232,92,.4);
+    background:
+      radial-gradient(700px 240px at 0% 0%, rgba(10,200,110,.22), transparent 70%),
+      radial-gradient(500px 220px at 100% 100%, rgba(126,232,92,.08), transparent 70%),
+      linear-gradient(180deg, #111b14, #0b120d);
+    box-shadow: 0 0 0 1px rgba(126,232,92,.08), 0 0 80px rgba(10,200,110,.14), 0 30px 80px rgba(0,0,0,.55);
+  }
+  .hero-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 20px; flex-wrap: wrap; margin-bottom: 16px; }
+  .hero-head h1 { margin: 0; font-family: var(--display); font-weight: 800; font-size: clamp(26px, 3vw, 36px); letter-spacing: -.035em; line-height: 1.1; }
+  .hero-head h1 em { font-style: normal; color: var(--accent-2); }
+  .hero-head span { color: var(--muted); font-size: 13px; }
+  .hero .search { padding: 10px; border-radius: 20px; background: rgba(4,8,5,.85); border: 1px solid rgba(126,232,92,.5);
+    box-shadow: 0 0 0 4px rgba(10,200,110,.1), inset 0 1px 0 rgba(255,255,255,.03); }
+  .hero .search:focus-within { border-color: var(--accent-2); box-shadow: 0 0 0 5px rgba(126,232,92,.18), 0 0 40px rgba(10,200,110,.25); }
+  .hero .search .icon { color: var(--accent-2); padding-left: 14px; }
+  .hero .search textarea { font-size: 18px; height: 56px; padding: 16px 6px; line-height: 24px; }
+  .hero .search .btn { height: 56px; padding: 0 24px; font-size: 16px; border-radius: 14px; }
+  .hero .search .btn-primary { padding: 0 30px; }
+  .hero .hint { margin-top: 14px; }
+  /* Ô tuỳ chọn sau khi phân tích cũng nổi bật, và nút Tải xuống là nút to nhất */
+  #result .card { border-color: rgba(126,232,92,.35); box-shadow: 0 0 60px rgba(10,200,110,.1), 0 24px 70px rgba(0,0,0,.5); }
+  #result .actions { padding: 18px 20px; margin: 4px -24px -24px; background: rgba(10,200,110,.07); border-top: 1px solid rgba(126,232,92,.22); }
+  .btn-xl { height: 60px; padding: 0 38px; font-size: 18px; border-radius: 16px; letter-spacing: -.01em; }
+  .btn-xl svg { width: 22px; height: 22px; }
+  .btn-xl:not(:disabled) { animation: callout 2.4s ease-in-out infinite; }
+  @keyframes callout {
+    0%, 100% { box-shadow: 0 0 0 1px rgba(126,232,92,.3), 0 12px 34px rgba(10,200,110,.35), 0 0 0 0 rgba(126,232,92,.45); }
+    50% { box-shadow: 0 0 0 1px rgba(126,232,92,.45), 0 14px 40px rgba(10,200,110,.5), 0 0 0 10px rgba(126,232,92,0); }
+  }
+  /* Phần còn lại lùi xuống nền để khu nhập link nổi lên */
+  .savebar, .job, .section-head .btn-ghost { opacity: .92; }
+  @media (max-width: 640px) {
+    .hero { padding: 18px 14px 14px; border-radius: 22px; }
+    .hero-head span { display: none; }
+    .hero .search textarea { font-size: 16px; }
+    .btn-xl { width: 100%; }
+  }
+  .swarn { margin-top: 8px; padding: 9px 12px; border-radius: 10px; font-size: 13px; color: #ffd27a; background: rgba(245,185,66,.08); border: 1px solid rgba(245,185,66,.35); }
   .lib-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
   @media (max-width: 640px) { .savebar { flex-wrap: wrap; } .savebar .tx { flex-basis: calc(100% - 50px); } .savebar .btn { flex: 1; } }
   .factions { display: flex; gap: 4px; margin-top: 10px; }
@@ -508,6 +550,10 @@
 
   <main class="view" id="viewDownload">
   <section class="hero">
+    <div class="hero-head">
+      <h1>Dán link, <em>tải về ngay</em></h1>
+      <span>YouTube · TikTok · Facebook · Instagram · X · SoundCloud và hơn 1.800 trang · hỗ trợ playlist và nhiều link</span>
+    </div>
 
     <div class="search" id="search">
       <div class="icon">
@@ -537,7 +583,7 @@
     <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
     <div class="tx"><small>Video và âm thanh đang lưu vào</small><b class="saveFolder">…</b></div>
     <button class="btn btn-ghost btn-sm local-only" data-save="pick">Đổi thư mục…</button>
-    <button class="btn btn-primary btn-sm local-only" data-save="open">Mở thư mục</button>
+    <button class="btn btn-ghost btn-sm local-only" data-save="open">Mở thư mục</button>
   </div>
 
   <div class="section-head">
@@ -558,7 +604,7 @@
       <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
       <div class="tx"><small>Thư viện đang hiển thị file trong</small><b class="saveFolder">…</b></div>
       <button class="btn btn-ghost btn-sm local-only" data-save="pick">Đổi thư mục…</button>
-      <button class="btn btn-primary btn-sm local-only" data-save="open">Mở thư mục</button>
+      <button class="btn btn-ghost btn-sm local-only" data-save="open">Mở thư mục</button>
     </div>
     <div class="lib-stats" id="libStats"></div>
     <div class="lib-bar">
@@ -652,7 +698,7 @@
     </div>
     <div class="actions">
       <div class="est" id="est"></div>
-      <button class="btn btn-primary" id="btnDownload">
+      <button class="btn btn-primary btn-xl" id="btnDownload">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
         <span>Tải xuống</span>
       </button>
@@ -1186,7 +1232,8 @@ async function loadSettings() {
     </div>
 
     <div class="sgroup"><h4>Tải xuống</h4>
-      <div class="srow"><div class="lbl"><b>Thư mục lưu</b><span>Ổ ${esc(s.disk?.drive || '')} còn trống ${fmtSize(s.disk?.free) || '—'}</span></div>
+      <div class="srow"><div class="lbl"><b>Thư mục lưu</b><span>Ổ ${esc(s.disk?.drive || '')} còn trống ${fmtSize(s.disk?.free) || '—'}</span>
+          ${s.folder_warning ? `<div class="swarn">${esc(s.folder_warning)}</div>` : ''}</div>
         <div class="ctl">${local ? `<input class="input" id="setFolder" value="${esc(s.download_folder)}" spellcheck="false" title="Gõ đường dẫn rồi bấm Lưu, hoặc bấm Chọn…">
           <button class="btn btn-ghost btn-sm" id="setFolderPick">${ICON.folder} Chọn…</button><button class="btn btn-ghost btn-sm" id="setFolderSave">Lưu</button>`
           : `<span class="state">${esc(s.download_folder)}</span>`}</div></div>

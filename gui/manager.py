@@ -1,5 +1,6 @@
 """Quản lý file đã tải và các thiết lập hệ thống của yt-dlp Studio."""
 import ctypes
+import fnmatch
 import hashlib
 import mimetypes
 import os
@@ -14,6 +15,24 @@ VIDEO_EXTS = {'.mp4', '.mkv', '.webm', '.mov', '.avi', '.flv', '.m4v', '.ts'}
 AUDIO_EXTS = {'.mp3', '.m4a', '.opus', '.ogg', '.wav', '.flac', '.aac', '.weba'}
 LEFTOVER_PATTERNS = ('*.part', '*.part-Frag*', '*.ytdl', '*.temp.*')
 MAX_FILES = 3000
+MAX_DEPTH = 3
+# Thư mục hệ thống không bao giờ quét (Thùng rác, dữ liệu hệ thống…)
+SKIP_DIRS = {'$recycle.bin', 'system volume information', 'windows', 'program files', 'program files (x86)', 'programdata', 'appdata', 'node_modules'}
+
+
+def _skip_dir(name):
+    return name.startswith(('.', '$')) or name.lower() in SKIP_DIRS
+
+
+def unsafe_folder(path):
+    """Lý do không nên dùng path làm thư mục lưu (cả ổ đĩa, thư mục Windows…), hoặc None."""
+    p = Path(path)
+    if p.anchor and p.resolve() == Path(p.anchor).resolve():
+        return f'Không nên lưu thẳng vào cả ổ {p.anchor}: thư viện sẽ quét và hiện mọi video, nhạc trên ổ (dễ xoá nhầm). Hãy chọn hoặc tạo một thư mục riêng, ví dụ {p.anchor}Downloads\\yt-dlp'
+    parts = {x.lower() for x in p.parts[1:2]}
+    if parts & {'windows', 'program files', 'program files (x86)', 'programdata'}:
+        return 'Không thể lưu vào thư mục hệ thống của Windows'
+    return None
 
 mimetypes.add_type('video/x-matroska', '.mkv')
 mimetypes.add_type('audio/ogg', '.opus')
@@ -40,7 +59,7 @@ def list_files(root):
         return files
     for dirpath, dirnames, filenames in os.walk(root_path):
         depth = len(Path(dirpath).relative_to(root_path).parts)
-        dirnames[:] = [d for d in dirnames if not d.startswith('.')] if depth < 3 else []
+        dirnames[:] = [d for d in dirnames if not _skip_dir(d)] if depth < MAX_DEPTH else []
         for name in filenames:
             ext = os.path.splitext(name)[1].lower()
             kind = 'video' if ext in VIDEO_EXTS else 'audio' if ext in AUDIO_EXTS else None
@@ -83,9 +102,14 @@ def leftovers(root):
     root_path = Path(root)
     if not root_path.is_dir():
         return []
-    found = set()
-    for pattern in LEFTOVER_PATTERNS:
-        found.update(p for p in root_path.rglob(pattern) if p.is_file())
+    found = []
+    # Chỉ quét như Thư viện (tối đa 3 cấp, bỏ thư mục hệ thống) để không bao giờ bị treo
+    for dirpath, dirnames, filenames in os.walk(root_path):
+        depth = len(Path(dirpath).relative_to(root_path).parts)
+        dirnames[:] = [d for d in dirnames if not _skip_dir(d)] if depth < MAX_DEPTH else []
+        for name in filenames:
+            if any(fnmatch.fnmatch(name, pat) for pat in LEFTOVER_PATTERNS):
+                found.append(Path(dirpath) / name)
     return sorted(found)
 
 

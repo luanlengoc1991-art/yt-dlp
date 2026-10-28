@@ -582,6 +582,8 @@ class Handler(BaseHTTPRequestHandler):
                     folder = str(data['download_folder'] or '').strip()
                     if not folder or not os.path.isabs(folder):
                         return self.send_json({'error': 'Hãy nhập đường dẫn đầy đủ, ví dụ D:\\Downloads\\yt-dlp'}, 400)
+                    if reason := manager.unsafe_folder(folder):
+                        return self.send_json({'error': reason}, 400)
                     os.makedirs(folder, exist_ok=True)
                     cfg['download_folder'] = folder
                 if 'max_concurrent' in data:
@@ -678,6 +680,7 @@ class Handler(BaseHTTPRequestHandler):
                 'download_folder': root,
                 'max_concurrent': max_concurrent(),
                 'max_concurrent_limit': MAX_CONCURRENT_LIMIT,
+                'folder_warning': manager.unsafe_folder(root),
                 'disk': manager.disk_info(root),
                 'leftovers': len(manager.leftovers(root)),
                 'autostart': manager.autostart_enabled() if manager.autostart_supported() else None,
