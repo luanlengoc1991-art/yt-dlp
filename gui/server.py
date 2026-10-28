@@ -212,6 +212,8 @@ def build_opts(job, options):
         'postprocessor_hooks': [lambda d: on_postprocess(job, d)],
         'concurrent_fragment_downloads': 4,
         'js_runtimes': JS_RUNTIMES,
+        # Giữ ngày sửa file = lúc tải về (mặc định yt-dlp đặt theo ngày đăng video)
+        'updatetime': False,
     }
     if options.get('playlist', True):
         # Video trong playlist được gom vào thư mục mang tên playlist, có số thứ tự
@@ -405,8 +407,25 @@ def start_job(url, options, preview=None):
 
 def public_job(job):
     data = {k: v for k, v in job.items() if k != 'cancel' and not k.startswith('_')}
-    data['file_names'] = [os.path.basename(p) for p in (job.get('_files') or {}).values()]
+    paths = list((job.get('_files') or {}).values())
+    data['file_names'] = [os.path.basename(p) for p in paths]
+    data['file_paths'] = paths
     return data
+
+
+def prune_deleted_jobs():
+    """Bỏ khỏi danh sách tải những mục đã xong mà file đã bị xoá (trong app hoặc bằng Explorer)."""
+    with jobs_lock:
+        for jid, job in list(jobs.items()):
+            files = job.get('_files')
+            if job['status'] != 'done' or not files:
+                continue
+            alive = {k: p for k, p in files.items() if os.path.exists(p)}
+            if not alive:
+                del jobs[jid]
+            elif len(alive) != len(files):
+                job['_files'] = alive
+                job['filepath'] = next(reversed(alive.values()))
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -703,6 +722,7 @@ class Handler(BaseHTTPRequestHandler):
                 with jobs_lock:
                     clients['count'] -= 1
         elif path == '/api/jobs':
+            prune_deleted_jobs()
             with jobs_lock:
                 data = sorted((public_job(j) for j in jobs.values()), key=lambda j: j['created'], reverse=True)
             self.send_json(data)
@@ -973,7 +993,7 @@ def open_window(url):
     """Mở giao diện thành cửa sổ ứng dụng riêng (không tab, không thanh địa chỉ)."""
     browser = find_browser()
     if browser:
-        subprocess.Popen([browser, f'--app={url}', '--window-size=1100,860', '--new-window'])
+        subprocess.Popen([browser, f'--app={url}', '--window-size=1440,940', '--new-window'])
     else:
         webbrowser.open(url)
 

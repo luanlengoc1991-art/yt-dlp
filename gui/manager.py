@@ -59,6 +59,10 @@ def list_files(root):
                 'ext': ext[1:],
                 'size': st.st_size,
                 'mtime': st.st_mtime,
+                # Windows: st_ctime = lúc file được tạo trên máy = lúc tải về
+                'added': st.st_ctime,
+                'full_path': str(full),
+                'dir_path': str(full.parent),
                 'playable': ext in ('.mp4', '.webm', '.m4v', '.mp3', '.m4a', '.opus', '.ogg', '.wav', '.flac', '.aac'),
             })
             if len(files) >= MAX_FILES:
