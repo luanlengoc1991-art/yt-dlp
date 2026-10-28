@@ -1,8 +1,8 @@
 {
-    "version":  "1.0.0",
+    "version":  "1.1.0",
     "url":  "https://ytdlp.luangroup.asia/yt-dlp-studio.exe",
-    "sha256":  "9d2faee5bd3c5a01c18f6e070689a11a58a9dbf83c88e0f6a3bf10fb27d9963b",
-    "size":  18838126,
-    "notes":  "Ban dau tien: tai video/am thanh, playlist, nhieu link, tu cap nhat",
-    "date":  "2026-10-28T07:08:49Z"
+    "sha256":  "542e822518d2cc23f0a5cd14e936aa6dc48dd4697b5863e9bd10b9ea898a7717",
+    "size":  18845594,
+    "notes":  "Dung app tu xa qua ytdlp.luangroup.asia (co mat khau), nut Luu ve thiet bi",
+    "date":  "2026-10-28T07:34:33Z"
 }
