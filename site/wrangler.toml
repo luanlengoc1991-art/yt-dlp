@@ -1,4 +1,5 @@
 name = "ytdlp-studio"
+main = "src/index.js"
 compatibility_date = "2026-10-01"
 # ytdlp.luangroup.asia trỏ về app trên máy nhà qua Cloudflare Tunnel.
 # Riêng 2 đường dẫn dưới đây do Worker phục vụ để các máy khác vẫn cập nhật được khi máy nhà tắt.

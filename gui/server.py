@@ -916,8 +916,8 @@ def update_loop():
         time.sleep(3)
     while True:
         check_update()
-        # Lỗi mạng thì thử lại sớm, bình thường kiểm tra 6 tiếng một lần
-        time.sleep(1800 if update['status'] == 'error' else 6 * 3600)
+        # Lỗi mạng thì thử lại sớm, bình thường kiểm tra 1 tiếng một lần
+        time.sleep(900 if update['status'] == 'error' else 3600)
 
 
 def restart_into_new_version():
