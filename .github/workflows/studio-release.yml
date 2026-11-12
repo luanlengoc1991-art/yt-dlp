@@ -65,7 +65,7 @@ jobs:
       - name: Cai thu vien
         run: |
           python -m pip install -U pip
-          python -m pip install -e ".[default]" pyinstaller==6.22.0
+          python -m pip install -e ".[default]" pyinstaller==6.22.0 pywebview==6.2.1
 
       - name: Build exe
         run: |
@@ -74,6 +74,7 @@ jobs:
             --icon "$PWD\devscripts\logo.ico" `
             --additional-hooks-dir="$PWD\yt_dlp\__pyinstaller" `
             --add-data "$PWD\gui\index.html:gui" --add-data "$PWD\gui\login.html:gui" `
+            --collect-all webview --add-data "$PWD\devscripts\logo.ico:devscripts" `
             --exclude-module setuptools --distpath dist --workpath build/studio --specpath build/studio gui/server.py
           if (-not (Test-Path dist/yt-dlp-studio.exe) -or (Get-Item dist/yt-dlp-studio.exe).Length -lt 5MB) { throw 'Build exe that bai' }
 

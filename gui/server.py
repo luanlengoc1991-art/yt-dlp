@@ -1025,6 +1025,51 @@ def maximize_window(title_part, timeout=15.0):
     return False
 
 
+def dark_titlebar(title):
+    """Thanh tiêu đề tối cho cửa sổ có đúng tiêu đề này (DWMWA_USE_IMMERSIVE_DARK_MODE). Lỗi thì bỏ qua."""
+    if os.name != 'nt':
+        return
+    try:
+        import ctypes
+        from ctypes import wintypes
+        hwnd = ctypes.windll.user32.FindWindowW(None, title)
+        if hwnd:
+            on = ctypes.c_int(1)
+            for attr in (20, 19):  # 20: Windows 11 / 10 20H1+, 19: bản Windows 10 cũ hơn
+                if ctypes.windll.dwmapi.DwmSetWindowAttribute(wintypes.HWND(hwnd), attr, ctypes.byref(on), ctypes.sizeof(on)) == 0:
+                    break
+    except Exception:
+        pass
+
+
+def native_window(url):
+    """Cửa sổ riêng của app (WebView2 có sẵn trên Windows 10/11), mở phóng to; chặn tới khi người dùng đóng cửa sổ.
+    Không có pywebview / WebView2 thì trả False để mở bằng trình duyệt như cũ."""
+    try:
+        import webview
+    except Exception:
+        return False
+    try:
+        icon = None
+        base = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent.parent))
+        for cand in (base / 'devscripts' / 'logo.ico', base / 'logo.ico'):
+            if cand.is_file():
+                icon = str(cand)
+                break
+        title = f'yt-dlp Studio {STUDIO_VERSION}'
+        win = webview.create_window(title, url, width=1440, height=940, min_size=(960, 640),
+                                    maximized=True, background_color='#0b0d12', text_select=True)
+        # thanh tiêu đề tối theo giao diện (Windows 10 2004+ / 11)
+        win.events.shown += lambda: threading.Thread(target=dark_titlebar, args=(title,), daemon=True).start()
+        # gui='edgechromium': WebView2; private_mode=False giữ cookie đăng nhập giữa các lần mở
+        webview.start(gui='edgechromium', private_mode=False, icon=icon,
+                      storage_path=str(Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'yt-dlp-studio' / 'webview'))
+        return True
+    except Exception as e:
+        print('Không mở được cửa sổ riêng, dùng trình duyệt:', e)
+        return False
+
+
 def open_window(url):
     """Mở giao diện thành cửa sổ ứng dụng riêng (không tab, không thanh địa chỉ), phóng to hết màn hình."""
     browser = find_browser()
@@ -1077,7 +1122,7 @@ def main():
     # --background: chạy nền khi khởi động Windows, không mở cửa sổ
     no_window = '--no-browser' in sys.argv or '--background' in sys.argv
     if already:
-        if not no_window:
+        if not no_window and not native_window(url):
             open_window(url)
         return
     server = ThreadingHTTPServer(('127.0.0.1', port), Handler)
@@ -1088,10 +1133,23 @@ def main():
         start_tunnel(port)
     elif not no_window:
         threading.Thread(target=watchdog, daemon=True).start()
-    if not no_window and not after_update:
-        threading.Timer(0.3, open_window, args=(url,)).start()
+    if no_window:
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            pass
+        return
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    # Cửa sổ riêng: đóng cửa sổ thì app vẫn chạy tiếp nếu còn video đang tải (watchdog tự tắt khi xong) hoặc có tunnel.
+    # Sau khi tự cập nhật, bản mới mở lại cửa sổ (cửa sổ của bản cũ đã đóng cùng tiến trình cũ).
+    if native_window(url):
+        while True:
+            time.sleep(3600)
+    if not after_update:
+        open_window(url)
     try:
-        server.serve_forever()
+        while True:
+            time.sleep(3600)
     except KeyboardInterrupt:
         pass
 
