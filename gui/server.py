@@ -992,11 +992,45 @@ def find_browser():
     return next((p for p in candidates if os.path.isfile(p)), None)
 
 
+def maximize_window(title_part, timeout=15.0):
+    """Phóng to cửa sổ có tiêu đề chứa title_part (Windows). Trình duyệt đang mở sẵn thì bỏ qua cờ
+    --start-maximized và nhớ cỡ cũ, nên tìm cửa sổ vừa mở rồi phóng to bằng Windows API. Không thấy thì thôi."""
+    if os.name != 'nt':
+        return False
+    import ctypes
+    from ctypes import wintypes
+    user32 = ctypes.windll.user32
+    found = []
+    proc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+    def each(hwnd, _):
+        if user32.IsWindowVisible(hwnd):
+            n = user32.GetWindowTextLengthW(hwnd)
+            if n:
+                buf = ctypes.create_unicode_buffer(n + 1)
+                user32.GetWindowTextW(hwnd, buf, n + 1)
+                if title_part in buf.value:
+                    found.append(hwnd)
+        return True
+
+    end = time.time() + timeout
+    while time.time() < end:
+        found.clear()
+        user32.EnumWindows(proc(each), 0)
+        if found:
+            for hwnd in found:
+                user32.ShowWindow(hwnd, 3)  # SW_MAXIMIZE
+            return True
+        time.sleep(0.25)
+    return False
+
+
 def open_window(url):
-    """Mở giao diện thành cửa sổ ứng dụng riêng (không tab, không thanh địa chỉ)."""
+    """Mở giao diện thành cửa sổ ứng dụng riêng (không tab, không thanh địa chỉ), phóng to hết màn hình."""
     browser = find_browser()
     if browser:
-        subprocess.Popen([browser, f'--app={url}', '--window-size=1440,940', '--new-window'])
+        subprocess.Popen([browser, f'--app={url}', '--start-maximized', '--new-window'])
+        threading.Thread(target=maximize_window, args=('yt-dlp Studio',), daemon=False).start()
     else:
         webbrowser.open(url)
 
