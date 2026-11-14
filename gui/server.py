@@ -1101,6 +1101,12 @@ def main():
     for name in ('stdout', 'stderr'):
         if getattr(sys, name) is None:
             setattr(sys, name, open(os.devnull, 'w', encoding='utf-8'))
+        else:
+            # App khác bật nền với stdout là NUL / ống: Windows dùng cp1252, in chữ "đ" làm sập app.
+            try:
+                getattr(sys, name).reconfigure(encoding='utf-8', errors='replace')
+            except Exception:
+                pass
 
     if '--set-password' in sys.argv:
         # yt-dlp-studio.exe --set-password "mật khẩu mới"
